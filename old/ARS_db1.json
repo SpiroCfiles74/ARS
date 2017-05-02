@@ -1,0 +1,96 @@
+//data model
+var Customer = [
+	{
+		"first_name" : "John",
+		"last_name" :"Smith",
+		"address" : "123 main st.",
+		"city" : "Toronto",
+		"province" :"Ontario",
+		"gender" : "male",
+		"email" : "js@yahoo.ca",
+		"phone" : "416-555-9988",
+		"dob" : "",
+		"customerProd":""
+	},
+	{
+		"first_name" : "Lydia",
+		"last_name" : "Elas",
+		"address" : "55 Danforth Ave",
+		"city" : "Toronto",
+		"province" :"Ontario",
+		"gender" : "female",
+		"email" : "le@hotmail.com",
+		"phone" : "416-222-1112",
+		"dob" : "",
+		"customerProd":""
+	},
+	{
+		"first_name" : "Bob",
+		"last_name" : "Borg",
+		"address" : "700 Mathesson ave",
+		"city" : "Mississauga",
+		"province" :"Ontario",
+		"gender" : "male",
+		"email" : "bb3@gmail.com",
+		"phone" : "905-123-8974",
+		"dob" : "",
+		"customerProd":""
+	},
+	{
+		"first_name" : "Cynthia",
+		"last_name" : "Nyquist",
+		"address" : "100 Country Rd. NE.",
+		"city" : "Calgary",
+		"province" :"Alberta",
+		"gender" : "female",
+		"email" : "cnq@ieee.org",
+		"phone" : "285-552-4578",
+		"dob" : "",
+		"customerProd":""
+	},
+	{
+		"first_name" : "Mathew",
+		"last_name" : "Johns",
+		"address" : "10 Steel ave.",
+		"city" : "Vaughan",
+		"province" :"Ontario",
+		"gender" : "male",
+		"email" : "mj@gmail.com",
+		"phone" : "905-593-3345",
+		"dob" : "",
+		"customerProd":""
+	}
+];
+
+var ManufRetail = [
+	{
+		"description" : "Roots Cabin Long Johns",
+		"style_Model" : "1305-0131",
+		"recall" : "10/7/2016",
+		"upc" : ""
+	},
+	{
+		"description" : "Canada Varsity Jacket-Black Pepper",
+		"style_Model" : "1105-0226",
+		"recall" : "10/7/2016",
+		"upc" : ""
+	},
+	{
+		"description" : "Royloo Educational Light Cube",
+		"style_Model" : "R59601",
+		"recall" : "11/30/2016",
+		"upc" : "66960596014"
+	},
+	{
+		"description" : "L'Atelier Cheval de Bois -Wood Rattle",
+		"style_Model" : "",
+		"recall" : "11/16/2016",
+		"upc" : ""
+	},
+	{
+		"description" : "Specialized Bicycle Components Cdn. Inc",
+		"style_Model" : "RA-61136",
+		"recall" : "11/18/2016",
+		"upc" : ""
+	}
+];

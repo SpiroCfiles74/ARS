@@ -1,0 +1,62 @@
+[
+	{
+		"firstname" : "John",
+		"lastname" :"Smith",
+		"address" : "123 main st.",
+		"city" : "Toronto",
+		"provstate" :"Ontario",
+		"gender" : "male",
+		"email" : "js@yahoo.ca",
+		"phone" : "416-555-9988",
+		"dob" : "",
+		"prodid":"0000001A"
+	},
+	{
+		"firstname" : "Lydia",
+		"lastname" : "Elas",
+		"address" : "55 Danforth Ave",
+		"city" : "Toronto",
+		"provstate" :"Ontario",
+		"gender" : "female",
+		"email" : "le@hotmail.com",
+		"phone" : "416-222-1112",
+		"dob" : "",
+		"prodid":"0000001B"
+	},
+	{
+		"firstname" : "Bob",
+		"lastname" : "Borg",
+		"address" : "700 Mathesson ave",
+		"city" : "Mississauga",
+		"provstate" :"Ontario",
+		"gender" : "male",
+		"email" : "bb3@gmail.com",
+		"phone" : "905-123-8974",
+		"dob" : "",
+		"prodid":"0000001C"
+	},
+	{
+		"firstname" : "Cynthia",
+		"lastname" : "Nyquist",
+		"address" : "100 Country Rd. NE.",
+		"city" : "Calgary",
+		"provstate" :"Alberta",
+		"gender" : "female",
+		"email" : "cnq@ieee.org",
+		"phone" : "285-552-4578",
+		"dob" : "",
+		"prodid":"0000001D"
+	},
+	{
+		"firstname" : "Mathew",
+		"lastname" : "Johns",
+		"address" : "10 Steel ave.",
+		"city" : "Vaughan",
+		"provstate" :"Ontario",
+		"gender" : "male",
+		"email" : "mj@gmail.com",
+		"phone" : "905-593-3345",
+		"dob" : "",
+		"prodid":"0000001E"
+	}
+]

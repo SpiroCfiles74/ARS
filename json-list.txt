@@ -1,0 +1,132 @@
+//use for loop for  MVP+, need system to read in data into record objects
+	/*ci := []Customer{{
+		Firstname: "John",
+		Lastname:  "Smith",
+		Address:   "123 main st.",
+		City:      "Toronto",
+		Provstate: "Ontario",
+		Gender:    "male",
+		Email:     "js@yahoo.ca",
+		Phone:     "416-555-9988",
+		Dob:       "15/04/1985",
+		ProdID:    "0000001A",
+		IMEI:      12345678912345,
+	},
+
+		{
+			Firstname: "Lydia",
+			Lastname:  "Elas",
+			Address:   "55 Danforth Ave",
+			City:      "Toronto",
+			Provstate: "Ontario",
+			Gender:    "female",
+			Email:     "le@hotmail.com",
+			Phone:     "416-222-1112",
+			Dob:       "04/01/1980",
+			ProdID:    "0000001B",
+			IMEI:      198765432145860,
+		},
+
+		{
+			Firstname: "Bob",
+			Lastname:  "Borg",
+			Address:   "700 Mathesson ave",
+			City:      "Mississauga",
+			Provstate: "Ontario",
+			Gender:    "male",
+			Email:     "bb3@gmail.com",
+			Phone:     "905-123-8974",
+			Dob:       "01/30/1975",
+			ProdID:    "0000001C",
+			IMEI:      111111111111000,
+		},
+
+		{
+			Firstname: "Cynthia",
+			Lastname:  "Nyquist",
+			Address:   "100 Country Rd. NE.",
+			City:      "Calgary",
+			Provstate: "Alberta",
+			Gender:    "female",
+			Email:     "cnq@ieee.org",
+			Phone:     "285-552-4578",
+			Dob:       "02/29/1972",
+			ProdID:    "0000001D",
+			IMEI:      000001111100000,
+		},
+
+		{
+			Firstname: "Mathew",
+			Lastname:  "Johns",
+			Address:   "10 Steel ave.",
+			City:      "Vaughan",
+			Provstate: "Ontario",
+			Gender:    "male",
+			Email:     "mj@gmail.com",
+			Phone:     "905-593-3345",
+			Dob:       "05/15/1990",
+			ProdID:    "0000001E",
+			IMEI:      110011459582847,
+		}}
+
+	mi := []ManufRetail{{
+		Co:           "Roots",
+		Model:        "1305-0131", //model/style
+		Description:  "Roots Cabin Long Johns",
+		ID:           "0000001E", //manufacture/retail product ID code, to be auto generated
+		Serial:       "",         //ups, etc...
+		PurchaseDate: "08/20/2016",
+		Recall:       "10/7/2016",
+	},
+		{
+			Co:           "Canada Varsity",
+			Model:        "1105-0226", //model/style
+			Description:  "Canada Varsity Jacket Black Pepper",
+			ID:           "0000001A", //manufacture/retail product ID code
+			Serial:       "",         //ups, etc...
+			PurchaseDate: "08/29/2016",
+			Recall:       "11/30/2016",
+		},
+		{
+			Co:           "Royloo Educational",
+			Model:        "R59601",
+			Description:  "Royloo Educational Light Cube",
+			ID:           "0000001B",
+			Serial:       "66960596014", //ups
+			PurchaseDate: "04/02/2016",
+			Recall:       "11/30/2016",
+		},
+		{
+			Co:           "L'Atelier Cheval de Bois",
+			Model:        "",
+			Description:  "L'Atelier Cheval de Bois -Wood Rattle",
+			ID:           "0000001C",
+			Serial:       "",
+			PurchaseDate: "06/19/2016",
+			Recall:       "11/16/2016",
+		},
+		{
+			Co:           "Specialized Bicycle Components Cdn. Inc",
+			Model:        "RA-61136",
+			Description:  "Specialized Bicycle Components",
+			ID:           "0000001D",
+			Serial:       "",
+			PurchaseDate: "07/09/2016",
+			Recall:       "11/18/2016",
+		}}
+	//system test subsection -MVP only, customer 1 = manu#2, model of ext database
+	for p := range ci { //use for condition while loop in GO
+		store1, err := json.Marshal(ci[p]) //parse json members
+		err = stub.PutState(key, store1)   //put in blockchain, given key
+		if err != nil {
+			fmt.Println("error customer record: ", err)
+		}
+		fmt.Println("test field in blockchain -purchase record ")
+
+		store2, err := json.Marshal(mi[p])
+		err = stub.PutState(key, store2)
+		if err != nil {
+			fmt.Println("error manufacture record: ", err)
+		}
+		fmt.Println("test field in blockchain manufacture record ")
+	}*/
