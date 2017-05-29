@@ -17,24 +17,35 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"os"
+	"strconv"
 	"time"
-	//"bytes"
-	//"crypto/x509"
-	"database/sql"
-	//"encoding/base64"
-	//"encoding/pem"
-	//"io"
-	//"io/ioutil"
-	//"net"
-	//"os"
+
+	"golang.org/x/crypto/ssh"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-m	//pb "github.com/hyperledger/fabric/protos/peer"
 )
+
+var logger = shim.NewLogger("mylogger")
+
+// SimpleChaincode example simple Chaincode implementation
+type SimpleChaincode struct {
+}
+
+var consumProdIndexStr = "_consumprodindex" //name for the key/value that will store a list of all known consumer product records
+var consumerIndexStr = "_consuindex"        //name for the key/value that will store a list of all known consumer records
+var alertIndexStr = "_alertindex"           //name for the key/value that will store a list of all known consumer product alert records
 
 // Declare your connection data and user credentials here
 const (
@@ -52,75 +63,82 @@ const (
 	sshRemotePort = 3306        // remote MySQL port
 
 	// MySQL access data
-	mySqlUsername = "root"
-	mySqlPassword = "Test12321"
-	mySqlDatabase = "arsystems"
+	mySQLUsername = "root"
+	mySQLPassword = "Test12321"
+	mySQLDatabase = "arsystems"
 )
 
-type consumer struct {
-	consumerid      string `json:"00001"`
-	imei            string `json:"000000000000001"`
-	dobdtm          string `json:"01/041970"`
-	gendercd        string `json:`
-	cntryid         string `json:"00"`
-	stateprovid     string `json:"11"`
-	cityid          string `json:"01"`
-	postalzipcdabbr string `json:"m1r1a2`
-	txnuserid       string `json:"barbarella"`
-	txndttm         string `json: "01/08/1980"`
+// Consumer record
+type Consumer struct {
+	Consumerid      int64  `json:"00001"`
+	ID              int64  `json:"idnumber"`
+	Dobdttm         string `json:"01041970"`
+	Gendercd        string `json:"female"`
+	Cntryid         int    `json:"00"`
+	Stateprovid     int    `json:"11"`
+	Cityid          int    `json:"01"`
+	Postalzipcdabbr string `json:"m1r"`
+	Txnuserid       string `json:"barbarella"`
+	Txndttm         string `json: "txmdttm"`
 }
 
-/*type manufacture struct {
-	manufactureid string `json:"100000"`
-	manufacturemn string `json:"100000"`
-	manufactureurl string `json:"100000"`
-	phonenmbrtxt string `json:"4165559999"`
-	txnuserid string `json:"barbarella"`
-	txndttm   string `json: "01081980"`
+// Manufacturer record
+type Manufacturer struct {
+	Manufactureid  string `json:"100000"`
+	Manufacturemn  string `json:"100001"`
+	Manufactureurl string `json:"100002"`
+	Phonenmbrtxt   string `json:"4165559999"`
+	Txnuserid      string `json:"barbarella2"`
+	Txndttm        string `json: "txndttm2"`
 }
 
-type product struct {
-	prodid string `json:"11111"`
-	upcnum string `json:"11111"`
-	prodnm string `json:"11111"`
-	proddesc string `json:"11111"`
-	stylebrandnm string `json:"11111"`
-	prodpic byte `json:""`
-	manufactureid string `json:"100000"`
-	txnuserid string `json:"barbarella"`
-	txndttm   string `json: "01081980"`
+// Product record
+type Product struct {
+	Prodid        string `json:"0000"`
+	Upcnum        string `json:"11113"`
+	Prodnm        string `json:"111151"`
+	Proddesc      string `json:"111152"`
+	Stylebrandnm  string `json:"11116"`
+	Prodpic       byte   `json:""`
+	Manufactureid string `json:"100000"`
+	Txnuserid     string `json:"barbarella3"`
+	Txndttm       string `json: "txndttm3"`
 }
 
-type consumer_product_alert struct {
-	productalertid string `json:"11111"`
-	consumerid string `json:"10101"`
-	prodid string `json:"11111"`
-	manufactureid string `json:"11111"`
-	txnuserid string `json:"barbarella"`
-	txndttm   string `json: "01081980"`
+// ConsumerProductAlert record
+type ConsumerProductAlert struct {
+	Productalertid string `json:"11114"`
+	Consumerid     string `json:"10105"`
+	Prodid         string `json:"11110"`
+	Manufactureid  string `json:"11112"`
+	Txnuserid      string `json:"barbarella4"`
+	Txndttm        string `json: "txndttm4"`
 }
 
-type product_alert struct {
-	productalertid string `json:"11111"`
-	prodid string `json:"11111"`
-	arsprodalertmsg string `json:"11111"`
-	prodalertserveritycd string `json:"11111"`
-	healthycdnurl string `json:"11111"`
-	txnuserid string `json:"barbarella"`
-	txndttm   string `json: "01081980"`
-}*/
-
-type consumer_product struct {
-	consumerid   string `json:"10101"`
-	prodid       string `json:"11111"`
-	totalunitnum string `json:"12345"`
-	unitprice    string `json:"$1000"`
-	purchasedate string `json:"01252015"`
-	sellercd     string `json:"6940385034"`
-	txnuserid    string `json:"barbarella"`
-	txndttm      string `json: "01081980"`
+// ProductAlert RECORD
+type ProductAlert struct {
+	Productalertid       string `json:"11111"`
+	Prodid               string `json:"18111"`
+	Arsprodalertmsg      string `json:"5678"`
+	Prodalertserveritycd string `json:"1234"`
+	Healthycdnurl        string `json:"11711"`
+	Txnuserid            string `json:"barbara"`
+	Txndttm              string `json: "txndttm5"`
 }
 
+// ConsumerProduct record -"purchase" table
+type ConsumerProduct struct {
+	Consumerid   string `json:"1010135435"`
+	Prodid       string `json:"11111099898"`
+	Totalunitnum string `json:"total"`
+	Unitprice    string `json:"1000.00"`
+	Purchasedate string `json:"01252015"`
+	Sellercd     string `json:"6940385034"`
+	Txnuserid    string `json:"barbarella"`
+	TxnDttm      string `json: "txndttm6"`
+}
+
+/*
 type country struct {
 	cntryid   string `json:"001"`
 	cntrynm   string `json:"001"`
@@ -131,12 +149,12 @@ type country struct {
 }
 
 type stateprov struct {
-	stateprovid  string `json:"00000"`
-	cntryid      string `json:"001"`
-	stateprov_nm string `json: "001"`
-	stateprovcd  string `json: "111"`
-	txnuserid    string `json:"barbarella"`
-	txndttm      int    `json: 01081980"`
+	stateprovid string `json:"00000"`
+	cntryid     string `json:"001"`
+	stateprovNm string `json: "001"`
+	stateprovcd string `json: "111"`
+	txnuserid   string `json:"barbarella"`
+	txndttm     int    `json: 01081980`
 }
 
 type city struct {
@@ -144,73 +162,207 @@ type city struct {
 	stateprovid string `json:"ontario"`
 	citynm      string `json:"01"`
 	txnuserid   string `json:"barbarella"`
-	txndttm     int    `json: 01081980"`
-}
+	txndttm     int    `json: 01081980`
+}*/
 
-// SimpleChaincode example simple Chaincode implementation
-type SimpleChaincode struct {
+type customEvent struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
 }
 
 func main() {
+	lld, _ := shim.LogLevel("DEBUG")
+	fmt.Println(lld)
+
+	logger.SetLevel(lld)
+	fmt.Println(logger.IsEnabledFor(lld))
+
 	err := shim.Start(new(SimpleChaincode)) // Start chaincode system
 	if err != nil {
-		fmt.Printf("Error starting Simple chaincode: %s", err)
+		//fmt.Printf("Error starting Simple chaincode: %s", err)
+		logger.Error("Could not start SampleChaincode")
+	} else {
+		logger.Info("SampleChaincode successfully started")
 	}
 }
 
 // Init sets all internal values and preparing the blockchain
-func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) ([]byte, error) {
-	_, args := stub.GetFunctionAndParameters()
+func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	fmt.Println("Initializing system")
 
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
 	err := stub.PutState("Startup Sequence", []byte(args[0])) //start up test		//std hello_world
 	if err != nil {
-		return nil, shim.Error
+		return nil, err
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in init %s\n\r", r)
+			fmt.Println("Recovered in init \n\r", r)
 		}
 	}()
 
-	// Load data from SQL
-	dbsshcom()
+	var empty []string
+	jsonAsBytes, _ := json.Marshal(empty) //marshal an emtpy array of strings to clear the index
+	err = stub.PutState(consumerIndexStr, jsonAsBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	/*	// Load data from SQL
+		fmt.Println("-> mysqlSSHtunnel")
+
+		tunnel := sshTunnel() // Initialize sshTunnel
+		go tunnel.Start()     // Start the sshTunnel
+
+		// Declare the dsn (aka database connection string)
+		// dsn := "opensim:h0tgrits@tcp(localhost:9000)/opensimdb"
+		dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+			mySQLUsername, mySQLPassword, sshLocalHost, sshLocalPort, mySQLDatabase)
+
+		// Open the database
+		db, err := sql.Open("mysql", dsn)
+		if err != nil {
+			dbErrorHandler(err)
+		}
+		defer db.Close() // keep it open until we are finished
+
+		stmtOut, err := db.Prepare("SELECT * FROM consumer_product")
+		if err != nil {
+			fmt.Println("Failed to prepare to read data", err)
+			panic(err.Error()) // proper error handling instead of panic in your app
+		}
+		defer stmtOut.Close()
+
+		stmtOut2, err := db.Prepare("SELECT * FROM consumer")
+		if err != nil {
+			fmt.Println("Failed to prepare to read data", err)
+			panic(err.Error()) // proper error handling instead of panic in your app
+		}
+		defer stmtOut2.Close()
+
+		// Query to check DB consumer_product
+		rows, err := db.Query("SELECT consumer_id as consumer, prod_id as prod, Total_unit_num as unit_num, unit_price, Purchase_date as purch_date, seller_cd as seller, txn_userid as userid, txn_dttm as dttm FROM consumer_product")
+		if err != nil {
+			dbErrorHandler(err)
+		}
+		defer rows.Close()
+
+		// Iterate though the rows returned and print them
+		for rows.Next() {
+			var (
+				consumerID   int64
+				prodID       int64
+				totalUnitNum int
+				unitPrice    float64
+				purchaseDate string
+				sellerCd     string
+				txnUserid    string
+				txnDttm      string
+			)
+			if err := rows.Scan(&consumerID, &prodID, &totalUnitNum, &unitPrice, &purchaseDate, &sellerCd, &txnUserid, &txnDttm); err != nil {
+				dbErrorHandler(err)
+			}
+			fmt.Printf("%d, %d, %d, %.2f, %s, %s, %s, %s\n", consumerID, prodID, totalUnitNum, unitPrice, purchaseDate, sellerCd, txnUserid, txnDttm)
+			consumProd := ConsumerProduct{consumerID, prodID, totalUnitNum, unitPrice, purchaseDate, sellerCd, txnUserid, txnDttm}
+			consumProdJSONasBytes, err := json.Marshal(consumProd)
+			if err != nil {
+				return nil, errors.New(err.Error())
+			}
+			//Place in block
+			err = stub.PutState(string(consumerID), consumProdJSONasBytes)
+			if err != nil {
+				return nil, errors.New(err.Error())
+			}
+		}
+		if err := rows.Err(); err != nil {
+			dbErrorHandler(err)
+		}*/
+
+	/*	//consumer query
+		rowsC, err := db.Query("SELECT consumer_id as consumer, imei, dob_dttm, gender_cd, cntry_id as cntryid, state_prov_id, city_id, postal_zip_cd_abbr, txn_userid as userid, txn_dttm as dttm FROM consumer WHERE cntry_id='41' ")
+		if err != nil {
+			dbErrorHandler(err)
+		}
+		defer rows.Close()
+
+		// Iterate though the rows returned and print them
+		for rowsC.Next() {
+			var (
+				consumerID      int64
+				imei            int64
+				dobDttm         string
+				genderCD        string
+				cntryID         int
+				stateProvID     int
+				cityID          int
+				postalZipCdAbbr string
+				txnUserid       string
+				txnDttm         string
+			)
+			if err := rowsC.Scan(&consumerID, &imei, &dobDttm, &genderCD, &cntryID, &stateProvID, &cityID, &postalZipCdAbbr, &txnUserid, &txnDttm); err != nil {
+				dbErrorHandler(err)
+			}
+			fmt.Printf("%d, %d, %s, %s, %d, %d, %d, %s, %s, %s\n", consumerID, imei, dobDttm, genderCD, cntryID, stateProvID, cityID, postalZipCdAbbr, txnUserid, txnDttm)
+			consumer := Consumer{consumerID, imei, dobDttm, genderCD, cntryID, stateProvID, cityID, postalZipCdAbbr, txnUserid, txnDttm}
+			consumerJSONasBytes, err := json.Marshal(consumer)
+			if err != nil {
+				return nil, errors.New(err.Error())
+			}
+			//Place in block
+			err = stub.PutState(string(consumerID), consumerJSONasBytes)
+			if err != nil {
+				return nil, errors.New(err.Error())
+			}
+		}
+		if err := rowsC.Err(); err != nil {
+			dbErrorHandler(err)
+		}*/
+	fmt.Println("<- mysqlSSHtunnel")
+
+	return nil, nil
 }
 
 // Invoke is our entry point to invoke a chaincode function, multiple function call API
-func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) ([]byte, error) {
-	function, args := stub.GetFunctionAndParameters()
+func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
+	//function, args := stub.GetFunctionAndParameters()
 	fmt.Println("invoke is running " + function)
 
 	// Handle different functions
 	if function == "init" {
-		return t.Init(stub, "init")
+		return t.Init(stub, "init", args)
 	} else if function == "write" {
 		return t.Write(stub, args)
 	} else if function == "deleteConsum" {
 		return t.DeleteConsum(stub, args)
 	} else if function == "search" {
-		return t.Search(stub, args)
-	} else if function == "Query" { //read a variable
-		return t.Query(stub, args)
-	} else if function == "delecteConsumProd" {
-		return t.DeleteConsProd(stub, args)
+		//return t.Search(stub, args)
+	} else if function == "deleteConsumProd" {
+		return t.DeleteConsumProd(stub, args)
+	} else if function == "ConsumerProduct" {
+		return t.ConsumerProduct(stub, args)
+	} else if function == "consumer" {
+		return t.Consumer(stub, args)
+	} else if function == "ConsumerProductAlert" {
+		return t.ConsumerProductAlert(stub, args)
 	}
 	fmt.Println("invoke did not find func: " + function)
-	return shim.Error("Received unknown function invocation")
+	return nil, errors.New("Received unknown function invocation")
 }
 
 // Query -call for checking blockchain value
 func (t *SimpleChaincode) Query(stub shim.ChaincodeStubInterface, function string, args []string) ([]byte, error) {
 	fmt.Println("query is running " + function)
 	// Handle different functions
-	if function == "read" { //read a variable
+	if function == "read" {
 		return t.read(stub, args)
+	} else if function == "output" {
+		return t.output(stub, args)
+	} else if function == "Match" {
+		return t.output(stub, args)
 	}
 	fmt.Println("query did not find func: " + function)
 
@@ -226,7 +378,7 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	}
 
 	key = args[0]
-	// GEt state from ledger
+	// Get state from ledger
 	valAsbytes, err := stub.GetState(key)
 	if err != nil {
 		jsonResp = "{\"Error\":\"Failed to get state for " + key + "\"}"
@@ -238,6 +390,149 @@ func (t *SimpleChaincode) read(stub shim.ChaincodeStubInterface, args []string) 
 	}
 	jsonResp = "{\"Name\":\"" + key + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
 	fmt.Printf("Query Response:%s\n", jsonResp)
+	return valAsbytes, nil
+}
+
+//output modified function to read blockchain and output results to SQL server
+func (t *SimpleChaincode) output(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	var key1, key2, jsonResp string
+
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting name of the keys to query")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in init \n\r", r)
+		}
+	}()
+
+	key1 = args[0]
+	key2 = args[1]
+	// Get state from ledger, last entry
+	valAsbytes, err := stub.GetState(key1)
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + key1 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	if valAsbytes == nil {
+		jsonResp = "{\"Error\":\"Nil amount for " + key1 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	jsonResp = "{\"Name\":\"" + key1 + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+	fmt.Printf("Query Response:%s\n", jsonResp)
+
+	valAsbytes, err = stub.GetState(key2)
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + key2 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	if valAsbytes == nil {
+		jsonResp = "{\"Error\":\"Nil amount for " + key2 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	jsonResp = "{\"Name\":\"" + key2 + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+	fmt.Printf("Query Response:%s\n", jsonResp)
+
+	keysIter, err := stub.RangeQueryState(key1, key2)
+	if err != nil {
+		return nil, fmt.Errorf("keys operation failed. Error accessing state: %s", err)
+	}
+	defer keysIter.Close()
+
+	var keys []string
+	for keysIter.HasNext() {
+		key, valAsbytes, iterErr := keysIter.Next()
+		if iterErr != nil {
+			return nil, fmt.Errorf("keys operation failed. Error accessing state: %s", err)
+		}
+		keys = append(keys, key)
+		jsonResp = "{\"Name\":\"" + key + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+		fmt.Printf("Query Response:%s\n", jsonResp)
+	}
+	//Publishing custom event
+	var event = customEvent{"Output", "Successfully read records"}
+	eventBytes, err := json.Marshal(&event)
+	if err != nil {
+		return nil, err
+	}
+	err = stub.SetEvent("evtSender", eventBytes)
+	if err != nil {
+		fmt.Println("Could not set event for Match record creation", err)
+	}
+	return valAsbytes, nil
+}
+
+// Match function for matching ...consumer "purchase"record and match given "recall alert request data" consumer product alert table
+func (t *SimpleChaincode) Match(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	var key1, key2, jsonResp string
+	fmt.Println("running Match()")
+	if len(args) != 4 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 4")
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in Search", r)
+		}
+	}()
+
+	key1 = args[0] //consumerID
+	key2 = args[1] //product ID
+	//key3 = args[2] //product alert ID
+	//key4 = args[3] // manufacture ID
+	// Get state from ledger, last entry
+	fmt.Println("Input key check")
+	valAsbytes, err := stub.GetState(key1)
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + key1 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	if valAsbytes == nil {
+		jsonResp = "{\"Error\":\"Nil amount for " + key1 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	jsonResp = "{\"Name\":\"" + key1 + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+	fmt.Printf("Query Response:%s\n", jsonResp)
+
+	valAsbytes, err = stub.GetState(key2)
+	if err != nil {
+		jsonResp = "{\"Error\":\"Failed to get state for " + key2 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	if valAsbytes == nil {
+		jsonResp = "{\"Error\":\"Nil amount for " + key2 + "\"}"
+		return nil, errors.New(jsonResp)
+	}
+	jsonResp = "{\"Name\":\"" + key2 + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+	fmt.Printf("Query Response:%s\n", jsonResp)
+
+	fmt.Println("Search between product ID and consumer ID")
+	keysIter, err := stub.RangeQueryState(key1, key2)
+	if err != nil {
+		return nil, fmt.Errorf("keys operation failed. Error accessing state: %s", err)
+	}
+	defer keysIter.Close()
+
+	var keys []string
+	for keysIter.HasNext() {
+		key, valAsbytes, iterErr := keysIter.Next()
+		if iterErr != nil {
+			return nil, fmt.Errorf("keys operation failed. Error accessing state: %s", err)
+		}
+		keys = append(keys, key)
+		jsonResp = "{\"Name\":\"" + key + "\",\"Value\":\"" + string(valAsbytes) + "\"}"
+		fmt.Printf("Query Response:%s\n", jsonResp)
+	}
+	//Publishing custom event
+	var event = customEvent{"Match", "Successfully found Match between records"}
+	eventBytes, err := json.Marshal(&event)
+	if err != nil {
+		return nil, err
+	}
+	err = stub.SetEvent("evtSender", eventBytes)
+	if err != nil {
+		fmt.Println("Could not set event for Match record creation", err)
+	}
 	return valAsbytes, nil
 }
 
@@ -261,93 +556,101 @@ func (t *SimpleChaincode) Write(stub shim.ChaincodeStubInterface, args []string)
 }
 
 // DeleteConsum -removes a record key/value pair from state
-func (t *SimpleChaincode) DeleteConsum(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var jsonResp string
-	var consumJSON consumer
+func (t *SimpleChaincode) DeleteConsum(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	var consumJSON Consumer
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 	recordName := args[0]
-
-	// to maintain the color~name index, we need to read the marble first and get its color
-	valAsbytes, err := stub.GetState(recordName) //get the marble from chaincode state
+	err := stub.DelState(recordName) //remove the key from chaincode state
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to get state for " + recordName + "\"}"
-		return shim.Error(jsonResp)
-	} else if valAsbytes == nil {
-		jsonResp = "{\"Error\":\"Marble does not exist: " + recordName + "\"}"
-		return shim.Error(jsonResp)
+		return nil, errors.New("Failed to delete state")
 	}
 
-	err = json.Unmarshal([]byte(valAsbytes), &consumJSON)
+	//get the record index
+	consumerAsBytes, err := stub.GetState(consumerIndexStr)
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to decode JSON of: " + recordName + "\"}"
-		return shim.Error(jsonResp)
+		return nil, errors.New("Failed to get record index")
 	}
+	var CIndex []string
+	json.Unmarshal(consumerAsBytes, &consumJSON) //un stringify it aka JSON.parse()
 
-	err = stub.DelState(recordName) //remove the marble from chaincode state
-	if err != nil {
-		return shim.Error("Failed to delete state:" + err.Error())
+	//remove record from index
+	for i, val := range CIndex {
+		fmt.Println(strconv.Itoa(i) + " - looking at " + val + " for " + recordName)
+		if val == recordName { //find the correct record
+			fmt.Println("found record")
+			CIndex = append(CIndex[:i], CIndex[i+1:]...) //remove it
+			for x := range CIndex {                      //debug prints...
+				fmt.Println(string(x) + " - " + CIndex[x])
+			}
+			break
+		}
 	}
+	jsonAsBytes, _ := json.Marshal(CIndex) //save new index
+	err = stub.PutState(consumerIndexStr, jsonAsBytes)
 
-	// maintain the index
-	indexName := "color~name"
-	recordNameIndexKey, err := stub.CreateCompositeKey(indexName, []string{consumer.consumerid, consumer.cntryid, consumer.stateprovid, consumer.cityid})
+	//Publishing custom event
+	var event = customEvent{"DeleteC", "Successfully deleted consumer record" + recordName}
+	eventBytes, err := json.Marshal(&event)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, err
 	}
-
-	//  Delete index entry to state.
-	err = stub.DelState(recordNameIndexKey)
+	err = stub.SetEvent("evtSender", eventBytes)
 	if err != nil {
-		return shim.Error("Failed to delete state:" + err.Error())
+		fmt.Println("Could not set event for DelectConsumer record ", err)
 	}
-	return shim.Success(nil)
+	return nil, nil
 }
 
 // DeleteConsumProd -removes a record key/value pair from state
-func (t *SimpleChaincode) DeleteConsumProd(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var jsonResp string
-	var conprodJSON consumer_product
+func (t *SimpleChaincode) DeleteConsumProd(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	var conprodJSON ConsumerProduct
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 	recordName := args[0]
-
-	// to maintain the color~name index, we need to read the marble first and get its color
-	valAsbytes, err := stub.GetState(recordName) //get the marble from chaincode state
+	err := stub.DelState(recordName) //remove the key from chaincode state
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to get state for " + recordName + "\"}"
-		return shim.Error(jsonResp)
-	} else if valAsbytes == nil {
-		jsonResp = "{\"Error\":\"Marble does not exist: " + recordName + "\"}"
-		return shim.Error(jsonResp)
+		return nil, errors.New("Failed to delete state")
 	}
 
-	err = json.Unmarshal([]byte(valAsbytes), &conprodJSON)
+	//get the record index
+	consumProdAsBytes, err := stub.GetState(consumProdIndexStr)
 	if err != nil {
-		jsonResp = "{\"Error\":\"Failed to decode JSON of: " + recordName + "\"}"
-		return shim.Error(jsonResp)
+		return nil, errors.New("Failed to get record index")
 	}
+	var CPIndex []string
+	json.Unmarshal(consumProdAsBytes, &conprodJSON) //un stringify it aka JSON.parse()
 
-	err = stub.DelState(recordName) //remove the marble from chaincode state
-	if err != nil {
-		return shim.Error("Failed to delete state:" + err.Error())
+	//remove record from index
+	for i, val := range CPIndex {
+		fmt.Println(strconv.Itoa(i) + " - looking at " + val + " for " + recordName)
+		if val == recordName { //find the correct record
+			fmt.Println("found record")
+			CPIndex = append(CPIndex[:i], CPIndex[i+1:]...) //remove it
+			for x := range CPIndex {                        //debug prints...
+				fmt.Println(string(x) + " - " + CPIndex[x])
+			}
+			break
+		}
 	}
+	jsonAsBytes, _ := json.Marshal(CPIndex) //save new index
+	err = stub.PutState(consumerIndexStr, jsonAsBytes)
 
-	// maintain the index
-	indexName := "color~name"
-	recordNameIndexKey, err := stub.CreateCompositeKey(indexName, []string{conprodJSON.Color, conprodJSON.Name})
+	//Publishing custom event
+	var event = customEvent{"DeleteCP", "Successfully deleted consumer product record"}
+	eventBytes, err := json.Marshal(&event)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, err
 	}
-
-	//  Delete index entry to state.
-	err = stub.DelState(recordNameIndexKey)
+	err = stub.SetEvent("evtSender", eventBytes)
 	if err != nil {
-		return shim.Error("Failed to delete state:" + err.Error())
+		fmt.Println("Could not set event for DelectConsumProd", err)
 	}
-	return shim.Success(nil)
+	return nil, nil
 }
 
 //makeTimestamp time indexing
@@ -355,329 +658,365 @@ func makeTimestamp() int64 {
 	return time.Now().UnixNano() / (int64(time.Millisecond) / int64(time.Nanosecond))
 }
 
-//CustomerProduct
-func (t *SimpleChaincode) CustomerProduct(stub shim.ChaincodeInterface) pb.Response {
-	function, args := stub.GetFunctionAndParameters()
-	fmt.Println("Loading Customer Product Record...")
+//ConsumerProduct ..input function
+func (t *SimpleChaincode) ConsumerProduct(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+
+	fmt.Println("Loading Consumer Product Record...")
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in Consumer Product \n\r", r)
+		}
+	}()
 
 	if len(args) != 8 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 8")
 	}
 
 	consumerid := args[0]
-	prodid := args[1]
-	totalunit := args[2]
+	/*if err != nil {
+		return nil, errors.New("1st argument must be a numeric string")
+	}*/
+	prodID := args[1]
+	/*if err != nil {
+		return nil, errors.New("2nd argument must be a numeric string")
+	}*/
+	totalunitnum := args[2]
+	/*if err != nil {
+		return nil, errors.New("3rd argument must be a numeric string")
+	}*/
 	unitprice := args[3]
+	//unitprice, err := strconv.ParseFloat(args[3], 32)
+	/*if err != nil {
+		return nil, errors.New("3rd argument must be a numeric string")
+	}*/
 	purchaseDate := args[4]
 	sellerCD := args[5]
 	txnUserID := args[6]
 	txndttm := args[7]
 
 	//check for duplicate object
-	custProdAsBytes, err := stub.GetState(prodid)
+	custProdAsBytes, err := stub.GetState(string(prodID))
 	if err != nil {
-		return shim.Error("Failed to get Customer Product Record" + err.Error())
+		return nil, errors.New("Failed to get Consumer Product Record " + err.Error())
 	} else if custProdAsBytes != nil {
-		fmt.Println("Customer Product Record already exists" + prodid)
-		return shim.Error("Customer Product Record already exists" + prodid)
+		fmt.Println("Consumer Product Record already exists " + string(prodID))
+		return nil, errors.New("Consumer Product Record already exists " + string(prodID))
 	}
 
 	// Create object and marshal to JSON
-	consumerProduct := &consumer_product{consumerid, prodid, totalunitnum, unitprice, purchasedate, sellercd, txnuserid, txndttm}
+	consumerProduct := &ConsumerProduct{consumerid, prodID, totalunitnum, unitprice, purchaseDate, sellerCD, txnUserID, txndttm}
 	consumerProdJSONasBytes, err := json.Marshal(consumerProduct)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New(err.Error())
 	}
 
-	// === Save marble to state ===
-	err = stub.PutState(prodid, consumerProdJSONasBytes)
+	// === Save record to state ===
+	err = stub.PutState(prodID, consumerProdJSONasBytes)
+	//err = stub.PutState(strconv.FormatInt(prodID, 64), consumerProdJSONasBytes)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New(err.Error())
 	}
 
-	// Index composite key -range based on product & consumer ID
-	indexName := "prodconsum_id"
-	prodconsumIndexKey, err := stub.CreateCompositeKey(indexName, []string{consumerProduct.prodid, consumerProduct.consumerid})
+	//get the record index
+	consumProdAsBytes, err := stub.GetState(consumProdIndexStr)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New("Failed to get record index")
 	}
-	//  Save index entry to state. Only the key name is needed, no need to store a duplicate copy of the marble.
-	//  Note - passing a 'nil' value will effectively delete the key from state, therefore we pass null character as value
-	value := []byte{0x00}
-	stub.PutState(prodconsumIndexKey, value)
+	var CPIndex []string
+	json.Unmarshal(consumProdAsBytes, &CPIndex) //un stringify it aka JSON.parse()
+
+	//append
+	//prodID := strconv.FormatInt(prodid, 10)
+	CPIndex = append(CPIndex, prodID) //add record name to index list
+	fmt.Println("! consumer product index: ", CPIndex)
+	jsonAsBytes, _ := json.Marshal(CPIndex)
+	err = stub.PutState(consumProdIndexStr, jsonAsBytes) //store name of record
 
 	// ==== objects(records) saved and indexed. Return success ====
 	fmt.Println("- end init objects")
-	return shim.Success(nil)
+	return nil, nil
 }
 
-//Customer_Product
-func (t *SimpleChaincode) consumer(stub shim.ChaincodeInterface) pb.Response {
-	function, args := stub.GetFunctionAndParameters()
+//Consumer - input write function
+func (t *SimpleChaincode) Consumer(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	//function, args := stub.GetFunctionAndParameters()
+	fmt.Println("Loading Consumer record...")
 
-	fmt.Println("Loading Customer record...")
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in Consumer \n\r", r)
+		}
+	}()
 
 	if len(args) != 10 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 10")
 	}
 
-	consumerid := args[0]
-	imei := args[1]
-	dobdtm := args[2]
+	consumerid, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return nil, errors.New("1st argument must be a numeric string")
+	}
+	id, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil {
+		return nil, errors.New("2nd argument must be a numeric string")
+	}
+	dobdttm := args[2]
 	gendercd := args[3]
-	cntryid := args[4]
-	stateprovid := args[5]
-	cityid := args[6]
+	cntryid, err := strconv.Atoi(args[4])
+	if err != nil {
+		return nil, errors.New("5th argument must be a numeric string")
+	}
+	stateprovid, err := strconv.Atoi(args[5])
+	if err != nil {
+		return nil, errors.New("6th argument must be a numeric string")
+	}
+	cityid, err := strconv.Atoi(args[6])
+	if err != nil {
+		return nil, errors.New("7th argument must be a numeric string")
+	}
 	postalzipcdabbr := args[7]
 	txnUserID := args[8]
 	txndttm := args[9]
 
 	//check for duplicate object
-	customerAsBytes, err := stub.GetState(consumerid)
+	consumerID := strconv.FormatInt(consumerid, 10)
+	ConsumerAsBytes, err := stub.GetState(consumerID)
 	if err != nil {
-		return shim.Error("Failed to get Customer Product Record" + err.Error())
-	} else if customerAsBytes != nil {
-		fmt.Println("Customer Product Record already exists" + consumerid)
-		return shim.Error("Customer Product Record already exists" + consumerid)
+		return nil, errors.New("Failed to get Consumer Product Record" + err.Error())
+	} else if ConsumerAsBytes != nil {
+		fmt.Println("Consumer Product Record already exists" + string(consumerid))
+		return nil, errors.New("Consumer Product Record already exists" + string(consumerid))
 	}
 
 	// Create object and marshal to JSON
-	consumerRecord := &consumer{consumerid, imei, dobdttm, gendercd, stateprovid, cityid, postalzipcdabbr, txnuserid, txndttm}
+	consumerRecord := &Consumer{consumerid, id, dobdttm, gendercd, cntryid, stateprovid, cityid, postalzipcdabbr, txnUserID, txndttm}
 	consumerJSONasBytes, err := json.Marshal(consumerRecord)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New(err.Error())
 	}
 
-	// === Save marble to state ===
-	err = stub.PutState(consumerid, consumerJSONasBytes)
+	// === Save record to state ===
+	err = stub.PutState(consumerID, consumerJSONasBytes)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New(err.Error())
 	}
 
-	// Index composite key -range based on product & consumer ID
-	indexNmae := "consumerloc_id"
-	consumerIndexKey, err := stub.CreateCompositeKey(indexName, []string{consumer.consumerid, consumer.cntryid, consumer.stateprovid, consumer.cityid})
+	//get the record index
+	consumerAsBytes, err := stub.GetState(consumerIndexStr)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, errors.New("Failed to get record index")
 	}
-	//  Save index entry to state. Only the key name is needed, no need to store a duplicate copy of the marble.
-	//  Note - passing a 'nil' value will effectively delete the key from state, therefore we pass null character as value
-	value := []byte{0x00}
-	stub.PutState(consumerIndexKey, value)
+	var CIndex []string
+	json.Unmarshal(consumerAsBytes, &CIndex) //un stringify it aka JSON.parse()
+
+	//append
+	CIndex = append(CIndex, consumerID) //add record name to index list
+	fmt.Println("! consumer index: ", CIndex)
+	jsonAsBytes, _ := json.Marshal(CIndex)
+	err = stub.PutState(consumerIndexStr, jsonAsBytes) //store name of record
 
 	// ==== objects(records) saved and indexed. Return success ====
 	fmt.Println("- end init objects")
-	return shim.Success(nil)
+	return nil, nil
 }
 
-// ssh connection and query
-func dbsshcom() {
-	fmt.Println("-> mysqlSSHtunnel")
-
-	tunnel := sshTunnel() // Initialize sshTunnel
-	go tunnel.Start()     // Start the sshTunnel
-
-	// Declare the dsn (aka database connection string)
-	// dsn := "opensim:h0tgrits@tcp(localhost:9000)/opensimdb"
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-		mySqlUsername, mySqlPassword, sshLocalHost, sshLocalPort, mySqlDatabase)
-
-	// Open the database
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		dbErrorHandler(err)
-	}
-	defer db.Close() // keep it open until we are finished
-
-	stmtOut, err := db.Prepare("SELECT * FROM consumer_product")
-	if err != nil {
-		fmt.Println("Failed to prepare to read data", err)
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-	defer stmtOut.Close()
-
-	stmtOut2, err := db.Prepare("SELECT * FROM consumer")
-	if err != nil {
-		fmt.Println("Failed to prepare to read data", err)
-		panic(err.Error()) // proper error handling instead of panic in your app
-	}
-	defer stmtOut2.Close()
-
-	// Query to check DB consumer_product
-	rows, err := db.Query("SELECT consumer_id as consumer, prod_id as prod, Total_unit_num as unit_num, unit_price, Purchase_date as purch_date, seller_cd as seller, txn_userid as userid, txn_dttm as dttm FROM consumer_product")
-	if err != nil {
-		dbErrorHandler(err)
-	}
-	defer rows.Close()
-
-	// Iterate though the rows returned and print them
-	for rows.Next() {
-		var (
-			consumerID   int64
-			prodID       int64
-			totalUnitNum int
-			unitPrice    float32
-			purchaseDate string
-			sellerCd     string
-			txnUserid    string
-			txnDttm      string
-		)
-		if err := rows.Scan(&consumerID, &prodID, &totalUnitNum, &unitPrice, &purchaseDate, &sellerCd, &txnUserid, &txnDttm); err != nil {
-			dbErrorHandler(err)
-		}
-		fmt.Printf("%d, %d, %d, %.2f, %s, %s, %s, %s\n", consumerID, prodID, totalUnitNum, unitPrice, purchaseDate, sellerCd, txnUserid, txnDttm)
-		consumProd := consumer_product{consumerID, prodID, totalUnitNum, unitPrice, purchaseDate, sellerCd, txnUserid, txnDttm}
-		consumProdJSONasBytes, err := json.Marshal(consumProd)
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-		//Place in block
-		err = stub.PutState(consumerid, consumProdJSONasBytes)
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-	}
-	if err := rows.Err(); err != nil {
-		dbErrorHandler(err)
-	}
-
-	//consumer query
-	rowsC, err := db.Query("SELECT consumer_id as consumer, imei, dob_dttm, gender_cd, cntry_id as cntryid, state_prov_id, city_id, postal_zip_cd_abbr, txn_userid as userid, txn_dttm as dttm FROM consumer WHERE cntry_id='41' ")
-	if err != nil {
-		dbErrorHandler(err)
-	}
-	defer rows.Close()
-
-	// Iterate though the rows returned and print them
-	for rowsC.Next() {
-		var (
-			consumerID      int64
-			imei            int64
-			dobDttm         string
-			genderCD        string
-			cntryID         int
-			stateProvID     int
-			cityID          int
-			postalZipCdAbbr string
-			txnUserid       string
-			txnDttm         string
-		)
-		if err := rowsC.Scan(&consumerID, &imei, &dobDttm, &genderCD, &cntryID, &stateProvID, &cityID, &postalZipCdAbbr, &txnUserid, &txnDttm); err != nil {
-			dbErrorHandler(err)
-		}
-		fmt.Printf("%d, %d, %s, %s, %d, %d, %d, %s, %s, %s\n", consumerID, imei, dobDttm, genderCD, cntryID, stateProvID, cityID, postalZipCdAbbr, txnUserid, txnDttm)
-		consumer := consumer{consumerID, imei, dobDttm, genderCD, cntryID, stateProvID, cityID, postalZipCdAbbr, txnUserid, txnDttm}
-		consumerJSONasBytes, err := json.Marshal(consumer)
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-		//Place in block
-		err = stub.PutState(consumerid, consumerJSONasBytes)
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-	}
-	if err := rowsC.Err(); err != nil {
-		dbErrorHandler(err)
-	}
-
-	fmt.Println("<- mysqlSSHtunnel")
-	return nil
-}
-
-// Search function for search comparison & matching ..."search" "prodID"
-func (t *SimpleChaincode) Search(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
-	var key string
-	//key = prod_id
-
-	fmt.Println("running Search()")
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
-	}
+//ConsumerProductAlert recall data table
+func (t *SimpleChaincode) ConsumerProductAlert(stub shim.ChaincodeStubInterface, args []string) ([]byte, error) {
+	fmt.Println("Loading Consumer Product Alert record...")
 
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered in Search", r)
+			fmt.Println("Recovered in Consumer Product Alert\n\r", r)
 		}
 	}()
 
-	/*key = args[0] // ProdID
-	//co.Timestamp = makeTimestamp()
+	if len(args) != 6 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 6")
+	}
+	productalertid := args[0]
+	consumerid := args[1]
+	prodid := args[2]
+	manufactureid := args[3]
+	txnUserID := args[4]
+	txndttm := args[5]
 
-	//Select all columns, from named tables JOIN between tables
-	tablepa, err := GetTable("product_alert")
+	//check for duplicate object)
+	alertAsBytes, err := stub.GetState(productalertid)
+	if err != nil {
+		return nil, errors.New("Failed to get Consumer Product Record" + err.Error())
+	} else if alertAsBytes != nil {
+		fmt.Println("Consumer Product Record already exists" + string(productalertid))
+		return nil, errors.New("Consumer Product Record already exists" + string(productalertid))
+	}
+
+	// Create object and marshal to JSON
+	alertRecord := &ConsumerProductAlert{productalertid, consumerid, prodid, manufactureid, txnUserID, txndttm}
+	alertJSONasBytes, err := json.Marshal(alertRecord)
 	if err != nil {
 		return nil, errors.New(err.Error())
 	}
 
-	tablecp, err := GetTable("consumer_product")
+	// === Save record to state ===
+	err = stub.PutState(productalertid, alertJSONasBytes)
 	if err != nil {
 		return nil, errors.New(err.Error())
 	}
 
-	//On key found equal to prod_id in both tables; define column, get row(s)
-	var columns []shim.Column
-	col1 := shim.Column{Value: &shim.Column_String_{String_: key}}
-	columns = append(columns, col1)
-
-	rowA, err := GetRows("product_alert", columns)
+	//get the record index
+	alertprodAsBytes, err := stub.GetState(alertIndexStr)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Failed to get record index")
 	}
+	var CIndex []string
+	json.Unmarshal(alertprodAsBytes, &CIndex) //un stringify it aka JSON.parse()
 
-	rowB, err := GetRows("consumer_product", columns)
+	//append
+	CIndex = append(CIndex, productalertid) //add record name to index list
+	fmt.Println("! consumer index: ", CIndex)
+	jsonAsBytes, _ := json.Marshal(CIndex)
+	err = stub.PutState(alertIndexStr, jsonAsBytes) //store name of record
+
+	// ==== objects(records) saved and indexed. Return success ====
+	fmt.Println("- end product alert objects")
+	return nil, nil
+}
+
+//dbErrorHandler - Simple mySql error handling (yet to implement)
+func dbErrorHandler(err error) {
+	switch err := err.(type) {
+	default:
+		fmt.Printf("Error %s\n", err)
+		os.Exit(-1)
+	}
+}
+
+// Endpoint - Define an endpoint with ip and port
+type Endpoint struct {
+	Host string
+	Port int
+}
+
+// Returns an endpoint as ip:port formatted string
+func (endpoint *Endpoint) String() string {
+	return fmt.Sprintf("%s:%d", endpoint.Host, endpoint.Port)
+}
+
+// SSHtunnel - Define the endpoints along the tunnel
+type SSHtunnel struct {
+	Local  *Endpoint
+	Server *Endpoint
+	Remote *Endpoint
+	Config *ssh.ClientConfig
+}
+
+// Start the tunnel
+func (tunnel *SSHtunnel) Start() error {
+	listener, err := net.Listen("tcp", tunnel.Local.String())
 	if err != nil {
-		return nil, err
+		return err
 	}
+	defer listener.Close()
 
-	//confirm key is equal
-	if rowA == rowB {
-		key = rowA
-		fmt.Printf("the query given key %s is found", key) //print out rows with matching key from both rows that match
-		fmt.Printf("%s", rowA)
-		fmt.Printf("%s", rowB)
-		/*for i, v := rowA {
-			fmt.Printf(v)
-			//fmt.Printf(rowB)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return err
 		}
-	} else {
-		fmt.Printf("the query fails given key %s", key)
+		go tunnel.forward(conn)
 	}
+}
 
-	//Select the manufacturing_id, given the prod_id key from the product table
-	tablepd, err := GetTable("product")
+// Port forwarding
+func (tunnel *SSHtunnel) forward(localConn net.Conn) {
+	// Establish connection to the intermediate server
+	serverConn, err := ssh.Dial("tcp", tunnel.Server.String(), tunnel.Config)
 	if err != nil {
-		return nil, errors.New(err.Error())
+		fmt.Printf("Server dial error: %s\n", err)
+		return
 	}
-	fmt.Printf(tablepd)
-	/*col1 = shim.Column{Value: &shim.Column_String_{String_: key}}
-	columns = append(columns, col1)
 
-	row3, err := GetRows("product", columns)
+	// access the target server
+	remoteConn, err := serverConn.Dial("tcp", tunnel.Remote.String())
 	if err != nil {
-		return nil, err
-	}
-	fmt.Printf(row3)
-
-	//Insert keys (x4) into consumer product alert table
-	state, err := InsertRow("consumer_product_alert", shim.Row{
-		Columns: []*shim.Column{
-			&shim.Column{Value: &shim.Column_String_{String_: manufacturer_id}},
-			&shim.Column{Value: &shim.Column_String_{String_: prod_id}},
-			&shim.Column{Value: &shim.Column_String_{String_: product_alert_id}},
-			&shim.Column{Value: &shim.Column_String_{String_: consumer_id}},
-		}})
-	if !state && err != nil {
-		return nil, err
-
+		fmt.Printf("Remote dial error: %s\n", err)
+		return
 	}
 
-	tablecpa, err := GetTable("consumer_product_alert")
+	// Transfer the data between  and the remote server
+	copyConn := func(writer, reader net.Conn) {
+		_, err := io.Copy(writer, reader)
+		if err != nil {
+			fmt.Printf("io.Copy error: %s", err)
+		}
+	}
+
+	go copyConn(localConn, remoteConn)
+	go copyConn(remoteConn, localConn)
+}
+
+// DecryptPEMkey : Decrypt encrypted PEM key data with a passphrase and embed it to key prefix
+// and postfix header data to make it valid for further private key parsing.
+func DecryptPEMkey(buffer []byte, passphrase string) []byte {
+	block, _ := pem.Decode(buffer)
+	der, err := x509.DecryptPEMBlock(block, []byte(passphrase))
 	if err != nil {
-		return nil, errors.New(err.Error())
+		fmt.Println("decrypt failed: ", err)
 	}
-	fmt.Printf(table_cpa)
-	*/
+	encoded := base64.StdEncoding.EncodeToString(der)
+	encoded = "-----BEGIN RSA PRIVATE KEY-----\n" + encoded +
+		"\n-----END RSA PRIVATE KEY-----\n"
+	return []byte(encoded)
+}
 
-	return nil, errors.New("Received unknown search function invocation")
+// PublicKeyFile - Get the signers from the OpenSSH key file (.pem) and return them for use in
+// the Authentication method. Decrypt encrypted key data with the passphrase.*/
+func PublicKeyFile(file string, passphrase string) ssh.AuthMethod {
+	buffer, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil
+	}
+
+	if bytes.Contains(buffer, []byte("ENCRYPTED")) {
+		// Decrypt the key with the passphrase if it has been encrypted
+		buffer = DecryptPEMkey(buffer, passphrase)
+	}
+
+	// Get the signers from the key
+	signers, err := ssh.ParsePrivateKey(buffer)
+	if err != nil {
+		return nil
+	}
+	return ssh.PublicKeys(signers)
+}
+
+// Define the ssh tunnel using its endpoint and config data
+func sshTunnel() *SSHtunnel {
+	localEndpoint := &Endpoint{
+		Host: sshLocalHost,
+		Port: sshLocalPort,
+	}
+
+	serverEndpoint := &Endpoint{
+		Host: sshServerHost,
+		Port: sshServerPort,
+	}
+
+	remoteEndpoint := &Endpoint{
+		Host: sshRemoteHost,
+		Port: sshRemotePort,
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User: sshUserName,
+		Auth: []ssh.AuthMethod{
+			PublicKeyFile(sshPrivateKeyFile, sshKeyPassphrase)},
+	}
+
+	return &SSHtunnel{
+		Config: sshConfig,
+		Local:  localEndpoint,
+		Server: serverEndpoint,
+		Remote: remoteEndpoint,
+	}
 }

@@ -1,4 +1,4 @@
-package SSHdb
+package sshdb
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 	"net"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql"
+	//_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -32,9 +32,9 @@ const (
 	sshRemotePort = 3306        // remote MySQL port
 
 	// MySQL access data
-	mySqlUsername = "root"
-	mySqlPassword = "Test12321"
-	mySqlDatabase = "arsystems"
+	mySQLUsername = "root"
+	mySQLPassword = "Test12321"
+	mySQLDatabase = "arsystems"
 )
 
 //dbErrorHandler - Simple mySql error handling (yet to implement)
